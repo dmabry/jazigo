@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"sort"
@@ -276,7 +275,7 @@ func FileRead(path string, maxSize int64) ([]byte, error) {
 		r = &io.LimitedReader{R: f, N: maxSize}
 	}
 
-	buf, readErr := ioutil.ReadAll(r)
+	buf, readErr := io.ReadAll(r)
 	if readErr != nil {
 		return buf, readErr
 	}
@@ -294,7 +293,8 @@ func writeFileBuf(path string, buf []byte, contentType string) error {
 		return s3fileput(path, buf, contentType)
 	}
 
-	return ioutil.WriteFile(path, buf, 0640)
+	err := os.WriteFile(path, buf, 0640)
+	return err
 }
 
 func writeFile(path string, writeFunc func(HasWrite) error, contentType string) error {

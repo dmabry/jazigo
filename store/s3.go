@@ -3,42 +3,26 @@ package store
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"path/filepath"
 	"strings"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/s3"
-
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/udhos/equalfile"
 )
 
-var awsSession *session.Session
-var s3SvcTable = map[string]*s3.S3{} // region => session
+var s3SvcTable = map[string]*s3.Client{} // region => client
 var s3logger hasPrintf
 var s3region string // default region
 
-func s3session() *session.Session {
-	if awsSession == nil {
-		var err error
-		awsSession, err = session.NewSession()
-		if err != nil {
-			s3log("s3client: could not create session: %v", err)
-			return nil
-		}
-		s3log("s3session: new session created")
-	}
-	return awsSession
-}
-
-func s3client(region string) *s3.S3 {
-
+func s3client(region string) *s3.Client {
 	if region == "" {
 		region = s3region // fallback to default region
 		if region == "" {
@@ -49,12 +33,14 @@ func s3client(region string) *s3.S3 {
 
 	svc, ok := s3SvcTable[region]
 	if !ok {
-		sess := s3session()
-		if sess == nil {
+		cfg, err := config.LoadDefaultConfig(context.TODO(),
+			config.WithRegion(region))
+		if err != nil {
+			s3log("s3client: could not load config for region %s: %v", region, err)
 			return nil
 		}
 
-		svc = s3.New(sess, aws.NewConfig().WithRegion(region))
+		svc = s3.NewFromConfig(cfg)
 		s3SvcTable[region] = svc
 		s3log("s3client: client created: region=[%s]", region)
 	}
@@ -124,11 +110,11 @@ func s3fileExists(path string) bool {
 		return false // ugh
 	}
 
-	params := &s3.HeadObjectInput{
-		Bucket: aws.String(bucket), // Required
-		Key:    aws.String(key),    // Required
+	input := &s3.HeadObjectInput{
+		Bucket: &bucket, // Required
+		Key:    &key,    // Required
 	}
-	if _, err := svc.HeadObject(params); err == nil {
+	if _, err := svc.HeadObject(context.TODO(), input); err == nil {
 		//s3log("s3fileExists: FOUND [%s]", path)
 		return true // found
 	}
@@ -145,21 +131,22 @@ func s3fileput(path string, buf []byte, contentType string) error {
 		return fmt.Errorf("s3fileput: missing s3 client")
 	}
 
-	params := &s3.PutObjectInput{
-		Bucket: aws.String(bucket),
-		Key:    aws.String(key),
+	input := &s3.PutObjectInput{
+		Bucket: &bucket,
+		Key:    &key,
 		Body:   bytes.NewReader(buf),
 	}
 
 	switch contentType {
 	case "": // none
 	case "detect": // detect
-		params.ContentType = aws.String(http.DetectContentType(buf))
+		contentTypeDetected := http.DetectContentType(buf)
+		input.ContentType = &contentTypeDetected
 	default: // use literal
-		params.ContentType = aws.String(contentType)
+		input.ContentType = &contentType
 	}
 
-	_, err := svc.PutObject(params)
+	_, err := svc.PutObject(context.TODO(), input)
 
 	//s3log("s3fileput: [%s] upload: error: %v", path, err)
 
@@ -175,11 +162,11 @@ func s3fileRemove(path string) error {
 		return fmt.Errorf("s3fileRemove: missing s3 client")
 	}
 
-	params := &s3.DeleteObjectInput{
-		Bucket: aws.String(bucket), // Required
-		Key:    aws.String(key),    // Required
+	input := &s3.DeleteObjectInput{
+		Bucket: &bucket, // Required
+		Key:    &key,    // Required
 	}
-	_, err := svc.DeleteObject(params)
+	_, err := svc.DeleteObject(context.TODO(), input)
 
 	//s3log("s3fileRemove: [%s] delete: error: %v", path, err)
 
@@ -197,12 +184,15 @@ func s3fileRename(p1, p2 string) error {
 
 	_, bucket2, key2 := s3parse(p2)
 
-	params := &s3.CopyObjectInput{
-		Bucket:     aws.String(bucket2),              // Required
-		CopySource: aws.String(bucket1 + "/" + key1), // Required
-		Key:        aws.String(key2),                 // Required
+	copySource := fmt.Sprintf("%s/%s", bucket1, key1) // Required
+	copySourcePtr := &copySource
+
+	input := &s3.CopyObjectInput{
+		Bucket:     &bucket2, // Required
+		CopySource: copySourcePtr,
+		Key:        &key2, // Required
 	}
-	_, copyErr := svc.CopyObject(params)
+	_, copyErr := svc.CopyObject(context.TODO(), input)
 	if copyErr != nil {
 		return copyErr
 	}
@@ -225,12 +215,12 @@ func s3fileReader(path string) (io.ReadCloser, error) {
 		return nil, fmt.Errorf("s3fileRead: missing s3 client")
 	}
 
-	params := &s3.GetObjectInput{
-		Bucket: aws.String(bucket), // Required
-		Key:    aws.String(key),    // Required
+	input := &s3.GetObjectInput{
+		Bucket: &bucket, // Required
+		Key:    &key,    // Required
 	}
 
-	resp, err := svc.GetObject(params)
+	resp, err := svc.GetObject(context.TODO(), input)
 
 	return resp.Body, err
 }
@@ -246,7 +236,7 @@ func s3fileRead(path string, maxSize int64) ([]byte, error) {
 
 	l := &io.LimitedReader{R: r, N: maxSize}
 
-	buf, readErr := ioutil.ReadAll(r)
+	buf, readErr := io.ReadAll(r)
 	if readErr != nil {
 		return buf, readErr
 	}
@@ -267,12 +257,12 @@ func s3fileFirstLine(path string) (string, error) {
 		return "", fmt.Errorf("s3fileFirstLine: missing s3 client")
 	}
 
-	params := &s3.GetObjectInput{
-		Bucket: aws.String(bucket), // Required
-		Key:    aws.String(key),    // Required
+	input := &s3.GetObjectInput{
+		Bucket: &bucket, // Required
+		Key:    &key,    // Required
 	}
 
-	resp, err := svc.GetObject(params)
+	resp, err := svc.GetObject(context.TODO(), input)
 	if err != nil {
 		return "", err
 	}
@@ -295,13 +285,13 @@ func s3dirList(path string) (string, []string, error) {
 		return dirname, names, fmt.Errorf("s3dirList: missing s3 client")
 	}
 
-	params := &s3.ListObjectsV2Input{
-		Bucket: aws.String(bucket), // Required
-		Prefix: aws.String(prefix),
+	input := &s3.ListObjectsV2Input{
+		Bucket: &bucket, // Required
+		Prefix: &prefix,
 	}
 
 	for {
-		resp, err := svc.ListObjectsV2(params)
+		resp, err := svc.ListObjectsV2(context.TODO(), input)
 		if err != nil {
 			return dirname, names, err
 		}
@@ -315,8 +305,8 @@ func s3dirList(path string) (string, []string, error) {
 			names = append(names, name)
 		}
 
-		if *resp.IsTruncated {
-			params.ContinuationToken = resp.NextContinuationToken
+		if resp.IsTruncated != nil && *resp.IsTruncated {
+			input.ContinuationToken = resp.NextContinuationToken
 			continue
 		}
 
@@ -349,26 +339,26 @@ func s3dirClean(path string) error {
 
 	// build object list
 	folder := filepath.Dir(prefix)
-	list := []*s3.ObjectIdentifier{}
+	list := []types.ObjectIdentifier{}
 	for _, filename := range names {
 		key := folder + "/" + filename
 		s3log("s3dirClean: [%s] bucket=[%s] key=[%s]", path, bucket, key)
-		obj := &s3.ObjectIdentifier{
-			Key: aws.String(key), // Required
+		obj := types.ObjectIdentifier{
+			Key: &key, // Required
 		}
 		list = append(list, obj)
 	}
 
 	// query parameters
-	params := &s3.DeleteObjectsInput{
-		Bucket: aws.String(bucket), // Required
-		Delete: &s3.Delete{ // Required
+	input := &s3.DeleteObjectsInput{
+		Bucket: &bucket, // Required
+		Delete: &types.Delete{ // Required
 			Objects: list, // Required
 		},
 	}
 
 	// send
-	_, err := svc.DeleteObjects(params)
+	_, err := svc.DeleteObjects(context.TODO(), input)
 
 	return err
 }
@@ -382,11 +372,11 @@ func s3fileInfo(path string) (time.Time, int64, error) {
 		return time.Time{}, 0, fmt.Errorf("s3fileInfo: missing s3 client")
 	}
 
-	params := &s3.HeadObjectInput{
-		Bucket: aws.String(bucket), // Required
-		Key:    aws.String(key),    // Required
+	input := &s3.HeadObjectInput{
+		Bucket: &bucket, // Required
+		Key:    &key,    // Required
 	}
-	resp, err := svc.HeadObject(params)
+	resp, err := svc.HeadObject(context.TODO(), input)
 	if err != nil {
 		return time.Time{}, 0, err
 	}
