@@ -1,16 +1,18 @@
+
+
+
+
 language: go
 
 go:
-  - tip
+  - "1.22"
+  - "1.23" # Add latest version for testing
 
 install:
-  - go get github.com/icza/gowut/gwu
-  - go get github.com/udhos/lockfile
-  - go get github.com/udhos/equalfile
-  - go get github.com/udhos/difflib
-  - go get gopkg.in/yaml.v3
-  - go get golang.org/x/crypto/ssh
-  - go get github.com/aws/aws-sdk-go/aws
+  - ./build.sh
 
 script:
-  - go install github.com/udhos/jazigo/jazigo
+  - go test -race -v ./...
+  - staticcheck ./... # Run static analysis as part of CI
+
+
