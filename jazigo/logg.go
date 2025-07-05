@@ -87,7 +87,7 @@ func (l *Logfile) Write(b []byte) (int, error) {
 		l.rotate()
 		if l.output == nil {
 			msg := "log: missing output - could not create output file"
-			l.logger.Printf(msg)
+			l.logger.Print(msg)
 			return 0, fmt.Errorf(msg)
 		}
 	}
@@ -102,7 +102,7 @@ func (l *Logfile) Write(b []byte) (int, error) {
 				l.rotate()
 				if l.output == nil {
 					msg := "log: rotate failure - could not create output file"
-					l.logger.Printf(msg)
+					l.logger.Print(msg)
 					return 0, fmt.Errorf(msg)
 				}
 			}

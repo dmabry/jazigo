@@ -1,3 +1,7 @@
+
+
+
+
 // Package store abstracts a file system.
 package store
 
@@ -8,7 +12,7 @@ import (
 
 // from https://talks.golang.org/2012/10things.slide#8
 
-var fs fileSystem = osFS{}
+var fs fileSystem = osFS{} // Unused
 
 type fileSystem interface {
 	Open(name string) (file, error)
@@ -28,3 +32,6 @@ type osFS struct{}
 
 func (osFS) Open(name string) (file, error)        { return os.Open(name) }
 func (osFS) Stat(name string) (os.FileInfo, error) { return os.Stat(name) }
+
+
+

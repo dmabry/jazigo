@@ -30,20 +30,6 @@ type transpTelnet struct {
 	logger hasPrintf
 }
 
-type telnetOptions struct {
-	supressGoAhead bool
-	linemode       bool
-}
-
-func (s *transpTelnet) Read(b []byte) (int, error) {
-	n1, err1 := s.Conn.Read(b)
-	if err1 != nil {
-		return n1, err1
-	}
-	n2, err2 := telnetNegotiation(b, n1, s, s.logger, false)
-	return n2, err2
-}
-
 type transpPipe struct {
 	proc     *exec.Cmd
 	stdout   io.ReadCloser
