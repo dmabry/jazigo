@@ -56,7 +56,9 @@ type app struct {
 	requestChan chan dev.FetchRequest
 
 	filterTable *dev.FilterTable
-}func (a *app) logf(fmt string, v ...interface{}) {
+}
+
+func (a *app) logf(fmt string, v ...interface{}) {
 	a.logger.Printf(fmt, v...)
 }
 

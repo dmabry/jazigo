@@ -1,22 +1,22 @@
 package store
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
-	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-	"github.com/aws/aws-sdk-go-v2/service/s3/types"
-	"github.com/udhos/equalfile"
 )
+
+// hasPrintf is an interface for loggers that support Printf
+type hasPrintf interface {
+	Printf(string, ...interface{})
+}
 
 var s3SvcTable = map[string]*s3.Client{} // region => client
 var s3logger hasPrintf
@@ -223,187 +223,6 @@ func s3fileReader(path string) (io.ReadCloser, error) {
 	resp, err := svc.GetObject(context.TODO(), input)
 
 	return resp.Body, err
-}
-
-func s3fileRead(path string, maxSize int64) ([]byte, error) {
-
-	r, err := s3fileReader(path)
-	if err != nil {
-		return nil, err
-	}
-
-	defer r.Close()
-
-	l := &io.LimitedReader{R: r, N: maxSize}
-
-	buf, readErr := io.ReadAll(r)
-	if readErr != nil {
-		return buf, readErr
-	}
-
-	if l.N < 1 {
-		return buf, fmt.Errorf("s3fileRead: reached max=%d: remaining bytes: %d", maxSize, l.N)
-	}
-
-	return buf, nil
-}
-
-func s3fileFirstLine(path string) (string, error) {
-
-	region, bucket, key := s3parse(path)
-
-	svc := s3client(region)
-	if svc == nil {
-		return "", fmt.Errorf("s3fileFirstLine: missing s3 client")
-	}
-
-	input := &s3.GetObjectInput{
-		Bucket: &bucket, // Required
-		Key:    &key,    // Required
-	}
-
-	resp, err := svc.GetObject(context.TODO(), input)
-	if err != nil {
-		return "", err
-	}
-
-	r := bufio.NewReader(resp.Body)
-	line, _, readErr := r.ReadLine()
-
-	return string(line[:]), readErr
-}
-
-func s3dirList(path string) (string, []string, error) {
-
-	dirname := filepath.Dir(path)
-	var names []string
-
-	region, bucket, prefix := s3parse(path)
-
-	svc := s3client(region)
-	if svc == nil {
-		return dirname, names, fmt.Errorf("s3dirList: missing s3 client")
-	}
-
-	input := &s3.ListObjectsV2Input{
-		Bucket: &bucket, // Required
-		Prefix: &prefix,
-	}
-
-	for {
-		resp, err := svc.ListObjectsV2(context.TODO(), input)
-		if err != nil {
-			return dirname, names, err
-		}
-
-		//s3log("s3dirList: FOUND %d keys [%s]", *resp.KeyCount, path)
-
-		for _, obj := range resp.Contents {
-			key := *obj.Key
-			name := filepath.Base(key)
-			//s3log("s3dirList: [%s] found: dir=[%s] file=[%s]", path, dirname, name)
-			names = append(names, name)
-		}
-
-		if resp.IsTruncated != nil && *resp.IsTruncated {
-			input.ContinuationToken = resp.NextContinuationToken
-			continue
-		}
-
-		break
-	}
-
-	//s3log("s3dirList: FOUND %d total keys [%s]", len(names), path)
-
-	return dirname, names, nil
-}
-
-func s3dirClean(path string) error {
-
-	// retrieve object list
-	_, names, listErr := s3dirList(path)
-	if listErr != nil {
-		return listErr
-	}
-
-	if len(names) < 1 {
-		return nil
-	}
-
-	region, bucket, prefix := s3parse(path)
-
-	svc := s3client(region)
-	if svc == nil {
-		return fmt.Errorf("s3dirClean: missing s3 client")
-	}
-
-	// build object list
-	folder := filepath.Dir(prefix)
-	list := []types.ObjectIdentifier{}
-	for _, filename := range names {
-		key := folder + "/" + filename
-		s3log("s3dirClean: [%s] bucket=[%s] key=[%s]", path, bucket, key)
-		obj := types.ObjectIdentifier{
-			Key: &key, // Required
-		}
-		list = append(list, obj)
-	}
-
-	// query parameters
-	input := &s3.DeleteObjectsInput{
-		Bucket: &bucket, // Required
-		Delete: &types.Delete{ // Required
-			Objects: list, // Required
-		},
-	}
-
-	// send
-	_, err := svc.DeleteObjects(context.TODO(), input)
-
-	return err
-}
-
-func s3fileInfo(path string) (time.Time, int64, error) {
-
-	region, bucket, key := s3parse(path)
-
-	svc := s3client(region)
-	if svc == nil {
-		return time.Time{}, 0, fmt.Errorf("s3fileInfo: missing s3 client")
-	}
-
-	input := &s3.HeadObjectInput{
-		Bucket: &bucket, // Required
-		Key:    &key,    // Required
-	}
-	resp, err := svc.HeadObject(context.TODO(), input)
-	if err != nil {
-		return time.Time{}, 0, err
-	}
-
-	mod := *resp.LastModified
-	size := *resp.ContentLength
-
-	return mod, size, nil
-}
-
-func s3fileCompare(p1, p2 string, maxSize int64) (bool, error) {
-	r1, err1 := s3fileReader(p1)
-	if err1 != nil {
-		return false, err1
-	}
-	defer r1.Close()
-
-	r2, err2 := s3fileReader(p2)
-	if err2 != nil {
-		return false, err2
-	}
-	defer r2.Close()
-
-	buf := make([]byte, 100000)
-	cmp := equalfile.New(buf, equalfile.Options{MaxSize: maxSize})
-
-	return cmp.CompareReader(r1, r2)
 }
 
 // S3URL builds the URL for an S3 bucket.

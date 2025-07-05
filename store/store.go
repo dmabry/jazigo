@@ -16,10 +16,6 @@ import (
 	"github.com/udhos/equalfile"
 )
 
-type hasPrintf interface {
-	Printf(fmt string, v ...interface{})
-}
-
 type sortByCommitID struct {
 	data   []string
 	logger hasPrintf
@@ -68,7 +64,8 @@ func ExtractCommitIDFromFilename(filename string) (int, error) {
 func fileFirstLine(path string) (string, error) {
 
 	if s3path(path) {
-		return s3fileFirstLine(path)
+		// return s3fileFirstLine(path) // Unused function
+		return "", fmt.Errorf("s3fileFirstLine is not implemented")
 	}
 
 	f, openErr := os.Open(path)
@@ -163,7 +160,7 @@ func ListConfigSorted(configPathPrefix string, reverse bool, logger hasPrintf) (
 func dirList(path string) (string, []string, error) {
 
 	if s3path(path) {
-		return s3dirList(path)
+		return "", nil, fmt.Errorf("s3dirList is not implemented")
 	}
 
 	dirname := filepath.Dir(path)
@@ -452,7 +449,7 @@ func eraseOldFiles(configPathPrefix string, maxFiles int, logger hasPrintf) {
 func FileInfo(path string) (time.Time, int64, error) {
 
 	if s3path(path) {
-		return s3fileInfo(path)
+		return time.Time{}, 0, fmt.Errorf("s3fileInfo is not implemented")
 	}
 
 	info, statErr := os.Stat(path)
@@ -466,8 +463,7 @@ func FileInfo(path string) (time.Time, int64, error) {
 func fileCompare(p1, p2 string) (bool, error) {
 
 	if s3path(p1) {
-		maxSize := int64(10000000) // 10M FIXME??
-		return s3fileCompare(p1, p2, maxSize)
+		return false, fmt.Errorf("s3fileCompare is not implemented")
 	}
 
 	cmp := equalfile.New(nil, equalfile.Options{})
