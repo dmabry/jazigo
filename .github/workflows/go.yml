@@ -1,0 +1,64 @@
+
+
+name: Go
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        go-version: ['1.22', '1.23']
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go ${{ matrix.go-version }}
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ matrix.go-version }}
+
+    - name: Install dependencies
+      run: |
+        go mod download
+
+    - name: Format code
+      run: |
+        gofmt -s -w .
+
+    - name: Run static analysis tools
+      run: |
+        go install golang.org/x/vuln/cmd/govulncheck@latest
+        go install honnef.co/go/tools/cmd/staticcheck@latest
+
+    - name: Lint code with staticcheck
+      run: |
+        staticcheck ./...
+
+    - name: Check for vulnerabilities
+      run: |
+        govulncheck ./...
+
+    - name: Tidy up dependencies
+      run: |
+        go mod tidy
+
+    - name: Run tests with race detector
+      run: |
+        go env -w CGO_ENABLED=1
+        go test -race -v ./...
+        go env -u CGO_ENABLED
+
+    - name: Build and install project
+      run: |
+        go install ./...
+
+    - name: Success message
+      run: echo "Build completed successfully!"
+

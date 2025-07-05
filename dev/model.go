@@ -826,13 +826,6 @@ func (d *Device) login(logger hasPrintf, t transp, capture *dialog) (bool, error
 	return enabled, nil
 }
 
-func round(val float64) int {
-	if val < 0 {
-		return int(val - 0.5)
-	}
-	return int(val + 0.5)
-}
-
 // ClearDeviceStatus forgets about last success (expire holdtime).
 // Otherwise holdtime could prevent immediate backup.
 func ClearDeviceStatus(tab DeviceUpdater, devID string, logger hasPrintf, holdtime time.Duration) (*Device, error) {

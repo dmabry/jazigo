@@ -1,4 +1,3 @@
-// Package store abstracts a file system.
 package store
 
 import (
@@ -8,7 +7,7 @@ import (
 
 // from https://talks.golang.org/2012/10things.slide#8
 
-var fs fileSystem = osFS{}
+// var fs fileSystem // Unused - Mock filesystem variable
 
 type fileSystem interface {
 	Open(name string) (file, error)
@@ -26,5 +25,6 @@ type file interface {
 // osFS implements fileSystem using the local disk.
 type osFS struct{}
 
+// Unused functions below
 func (osFS) Open(name string) (file, error)        { return os.Open(name) }
 func (osFS) Stat(name string) (os.FileInfo, error) { return os.Stat(name) }

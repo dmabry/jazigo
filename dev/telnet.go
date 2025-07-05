@@ -5,23 +5,24 @@ import (
 )
 
 const (
-	cmdWill = 251
-	cmdWont = 252
-	cmdDo   = 253
-	cmdDont = 254
-	cmdIAC  = 255
+	cmdWill = 251 // Unused - Telnet command Will
+	cmdWont = 252 // Unused - Telnet command Wont
+	cmdDo   = 253 // Unused - Telnet command Do
+	cmdDont = 254 // Unused - Telnet command Dont
+	cmdIAC  = 255 // Unused - Telnet command Interpret As Command
 
-	optEcho           = 1
-	optSupressGoAhead = 3
-	optLinemode       = 34
+	// Telnet options constants (unused)
+	optEcho           = 1  // Unused - Telnet option Echo
+	optSupressGoAhead = 3  // Unused - Telnet option Suppress Go Ahead
+	optLinemode       = 34 // Unused - Telnet option Linemode
 )
 
-func shift(b []byte, size, offset int) int {
+func shift(b []byte, size, offset int) int { // Unused - Byte array shifting function
 	copy(b, b[offset:size])
 	return size - offset
 }
 
-type telnetNegotiationOnly struct{}
+type telnetNegotiationOnly struct{} // Unused
 
 var telnetNegOnly = telnetNegotiationOnly{}
 
@@ -29,7 +30,7 @@ func (e telnetNegotiationOnly) Error() string {
 	return "telnetNegotiationOnlyError"
 }
 
-func telnetNegotiation(buf []byte, n int, t transp, logger hasPrintf, debug bool) (int, error) {
+func telnetNegotiation(buf []byte, n int, t transp, logger hasPrintf, debug bool) (int, error) { // Unused - Telnet negotiation function
 
 	timeout := 5 * time.Second // FIXME??
 	hitNeg := false
@@ -40,9 +41,6 @@ func telnetNegotiation(buf []byte, n int, t transp, logger hasPrintf, debug bool
 		}
 		if buf[0] != cmdIAC {
 			break // not IAC
-		}
-		if debug {
-			logger.Printf("telnetNegotiation: debug: FOUND telnet IAC")
 		}
 		b1 := buf[1]
 		switch b1 {

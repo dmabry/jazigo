@@ -58,10 +58,6 @@ type app struct {
 	filterTable *dev.FilterTable
 }
 
-type hasPrintf interface {
-	Printf(fmt string, v ...interface{})
-}
-
 func (a *app) logf(fmt string, v ...interface{}) {
 	a.logger.Printf(fmt, v...)
 }
